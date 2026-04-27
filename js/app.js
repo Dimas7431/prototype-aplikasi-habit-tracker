@@ -2,7 +2,11 @@
 const SUPABASE_URL = 'https://loovtbdzjgpqamhssnue.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxvb3Z0YmR6amdwcWFtaHNzbnVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMDI3MTcsImV4cCI6MjA5MDc3ODcxN30.StgTqDRbsasnEq7gfnkF4P1bZTaV8pf3BmPIhUPFI4Q';
 // Ensure Supabase JS CDN is loaded in HTML before app.js
-const supabaseClient = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+const supabaseClient = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+        flowType: 'implicit'
+    }
+}) : null;
 
 // Initialize theme
 function initTheme() {
@@ -290,9 +294,17 @@ async function setupAuthListener() {
     handleRouteProtection(session);
 
     supabaseClient.auth.onAuthStateChange((event, session) => {
-        if (event === 'SIGNED_IN') {
+        const currentPath = window.location.pathname.toLowerCase();
+        if (event === 'PASSWORD_RECOVERY') {
+            if (!currentPath.includes('reset_password.html') && !currentPath.includes('forgot_password.html')) {
+                window.location.href = 'forgot_password.html' + window.location.hash + window.location.search;
+            }
+        } else if (event === 'SIGNED_IN') {
             console.log('User signed in');
-            handleRouteProtection(session);
+            // Don't redirect away from recovery-related pages during password reset flow
+            if (!currentPath.includes('forgot_password.html') && !currentPath.includes('reset_password.html')) {
+                handleRouteProtection(session);
+            }
         } else if (event === 'SIGNED_OUT') {
             console.log('User signed out');
             handleRouteProtection(null);
@@ -302,13 +314,18 @@ async function setupAuthListener() {
 
 function handleRouteProtection(session) {
     const currentPath = window.location.pathname.toLowerCase();
-    const isPublicRoute = currentPath.includes('login.html') || currentPath.includes('register.html');
+    const isPublicRoute = 
+        currentPath.includes('login.html') || 
+        currentPath.includes('register.html') ||
+        currentPath.includes('forgot_password.html') ||
+        currentPath.includes('reset_password.html');
     
     if (!session && !isPublicRoute) {
         // Not logged in and on protected page -> redirect to login
         window.location.href = 'login.html';
-    } else if (session && isPublicRoute) {
+    } else if (session && (currentPath.includes('login.html') || currentPath.includes('register.html'))) {
         // Logged in but on login/register page -> redirect to index
+        // Don't redirect from forgot_password or reset_password even if logged in
         window.location.href = 'index.html';
     }
 }
